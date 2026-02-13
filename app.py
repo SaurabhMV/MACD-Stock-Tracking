@@ -12,7 +12,7 @@ st.title("📈 Ultimate Strategy & Signal Dashboard")
 with st.sidebar:
     st.header("Parameters")
     ticker = st.text_input("Stock Ticker:", "AAPL").upper()
-    period = st.selectbox("Time Period:", ["6mo", "1y", "2y", "5y"], index=1)
+    period = st.selectbox("Time Period:", ["3mo", "6mo", "1y", "2y", "5y"], index=1)
     
     st.subheader("Chart View")
     show_signals = st.checkbox("Show Buy/Sell Signals", value=True)
