@@ -70,15 +70,28 @@ if ticker:
         dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
         df['ADX'] = dx.rolling(window=14).mean()
 
-        # --- 2. 4-TIER SIGNAL LOGIC ---
-        buy_cond = (df['MACD'] > df['Signal_Line']) & (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)) & (df['RSI'] < 50)
-        sell_cond = (df['MACD'] < df['Signal_Line']) & (df['MACD'].shift(1) >= df['Signal_Line'].shift(1)) & (df['RSI'] > 50)
+        # --- 2. 6-TIER SIGNAL LOGIC ---
+        # Basic MACD Crossovers (Tier 1)
+        macd_buy = (df['MACD'] > df['Signal_Line']) & (df['MACD'].shift(1) <= df['Signal_Line'].shift(1))
+        macd_sell = (df['MACD'] < df['Signal_Line']) & (df['MACD'].shift(1) >= df['Signal_Line'].shift(1))
+        
+        # Confluence Conditions
+        rsi_buy_ok = df['RSI'] < 50
+        rsi_sell_ok = df['RSI'] > 50
         strong_trend = df['ADX'] > 25
 
-        df['Strong_Buy'] = np.where(buy_cond & strong_trend, df['Close'], np.nan)
-        df['Buy_Signal'] = np.where(buy_cond & ~strong_trend, df['Close'], np.nan)
-        df['Strong_Sell'] = np.where(sell_cond & strong_trend, df['Close'], np.nan)
-        df['Sell_Signal'] = np.where(sell_cond & ~strong_trend, df['Close'], np.nan)
+        # Signal Assignments
+        # Tier 3: Strong (MACD + RSI + ADX)
+        df['Strong_Buy'] = np.where(macd_buy & rsi_buy_ok & strong_trend, df['Close'], np.nan)
+        df['Strong_Sell'] = np.where(macd_sell & rsi_sell_ok & strong_trend, df['Close'], np.nan)
+        
+        # Tier 2: Standard (MACD + RSI) - Only if not Strong
+        df['Buy_Signal'] = np.where(macd_buy & rsi_buy_ok & ~strong_trend, df['Close'], np.nan)
+        df['Sell_Signal'] = np.where(macd_sell & rsi_sell_ok & ~strong_trend, df['Close'], np.nan)
+        
+        # Tier 1: Momentum (MACD Only) - Only if RSI doesn't agree
+        df['Momo_Buy'] = np.where(macd_buy & ~rsi_buy_ok, df['Close'], np.nan)
+        df['Momo_Sell'] = np.where(macd_sell & ~rsi_sell_ok, df['Close'], np.nan)
 
         # --- 3. ALERTS & METRICS ---
         if not np.isnan(df['Strong_Buy'].iloc[-1]):
@@ -107,14 +120,15 @@ if ticker:
             fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower', line=dict(color='rgba(173, 216, 230, 0.2)', width=1), fill='tonexty'), row=1, col=1)
 
         if show_signals:
-            fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Buy'], name='STRONG BUY', mode='markers', 
-                                     marker=dict(symbol='diamond', size=14, color='#00ff00', line=dict(width=2, color='white'))), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='BUY', mode='markers', 
-                                     marker=dict(symbol='triangle-up', size=10, color='#26a69a')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Sell'], name='STRONG SELL', mode='markers', 
-                                     marker=dict(symbol='diamond', size=14, color='#ff0000', line=dict(width=2, color='white'))), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='SELL', mode='markers', 
-                                     marker=dict(symbol='triangle-down', size=10, color='#ef5350')), row=1, col=1)
+            # TIER 3: STRONG
+            fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Buy'], name='STRONG BUY (ADX+RSI)', mode='markers', marker=dict(symbol='diamond', size=14, color='#00ff00', line=dict(width=2, color='white'))), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Sell'], name='STRONG SELL (ADX+RSI)', mode='markers', marker=dict(symbol='diamond', size=14, color='#ff0000', line=dict(width=2, color='white'))), row=1, col=1)
+            # TIER 2: STANDARD
+            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='BUY (RSI Filter)', mode='markers', marker=dict(symbol='triangle-up', size=11, color='#26a69a')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='SELL (RSI Filter)', mode='markers', marker=dict(symbol='triangle-down', size=11, color='#ef5350')), row=1, col=1)
+            # TIER 1: MOMENTUM
+            fig.add_trace(go.Scatter(x=df.index, y=df['Momo_Buy'], name='MOMENTUM BUY (MACD Only)', mode='markers', marker=dict(symbol='circle', size=7, color='#b2ff59', opacity=0.6)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Momo_Sell'], name='MOMENTUM SELL (MACD Only)', mode='markers', marker=dict(symbol='circle', size=7, color='#ff8a80', opacity=0.6)), row=1, col=1)
 
         fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00d4ff')), row=2, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='#ff9900')), row=2, col=1)
@@ -138,16 +152,16 @@ if ticker:
         st.markdown("---")
         st.subheader("📊 Signal Tier Definitions")
         
-        t1, t2 = st.columns(2)
+        t1, t2, t3 = st.columns(3)
         with t1:
-            st.markdown("### 🟢 Bullish Tiers")
-            st.info("**STRONG BUY (Diamond):** MACD cross-up occurs while ADX is > 25. This indicates momentum is entering a powerful trend.")
-            st.write("**BUY (Triangle):** MACD cross-up occurs while ADX is < 25. This suggests a potential move, but in a weaker or sideways market.")
-        
+            st.markdown("### 🏆 Tier 3: Strong")
+            st.info("**High Confidence:** MACD Crossover + RSI Filter (<50 for Buy) + ADX Trend Strength (>25). Use these for trending markets.")
         with t2:
-            st.markdown("### 🔴 Bearish Tiers")
-            st.info("**STRONG SELL (Diamond):** MACD cross-down occurs while ADX is > 25. This indicates a high-velocity downward trend.")
-            st.write("**SELL (Triangle):** MACD cross-down occurs while ADX is < 25. Suggests a trend shift, but lacks strong volume or trend pressure.")
+            st.markdown("### 📈 Tier 2: Standard")
+            st.success("**Reliable:** MACD Crossover + RSI Filter. These signals ensure you aren't buying when the stock is already overextended.")
+        with t3:
+            st.markdown("### ⚡ Tier 1: Momentum")
+            st.warning("**Aggressive:** Pure MACD Crossover. These trigger regardless of RSI or ADX levels. Higher risk of false signals.")
 
     else:
         st.error(f"Could not load data for {ticker}. Please check the ticker symbol.")
