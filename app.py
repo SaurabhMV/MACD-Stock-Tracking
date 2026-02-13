@@ -1,120 +1,94 @@
 import streamlit as st
 import yfinance as yf
-import time
-import requests
 import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# --- Page Config ---
-st.set_page_config(page_title="Smart Interval Monitor", page_icon="⏲️", layout="wide")
-st.title("⏲️ Responsive Stock Monitor")
+st.set_page_config(page_title="Strategy Backtester", layout="wide")
+st.title("📊 Stock Strategy Backtester")
 
-# --- Sidebar ---
-st.sidebar.header("Settings")
-bot_token = st.sidebar.text_input("Telegram Bot Token", type="password")
-chat_id = st.sidebar.text_input("Authorized Chat ID")
-ticker_input = st.sidebar.text_input("Tickers", value="AAPL, TSLA, ZGLD.TO")
-drop_threshold = st.sidebar.slider("Alert Threshold (%)", 1, 20, 5)
+with st.sidebar:
+    st.header("Parameters")
+    ticker = st.text_input("Stock Ticker:", "AAPL").upper()
+    period = st.selectbox("Time Period:", ["1y", "2y", "5y"], index=0)
+    initial_capital = st.number_input("Initial Investment ($):", value=10000)
 
-# --- RE-ADDED FEATURE: Check Interval ---
-check_interval = st.sidebar.number_input(
-    "Refresh Rate (seconds)", 
-    min_value=30, 
-    value=120, 
-    help="How often to check stock prices. Bot remains responsive every 10s."
-)
+@st.cache_data
+def load_data(symbol, p):
+    data = yf.download(symbol, period=p)
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+    return data
 
-# --- State Management ---
-if 'running' not in st.session_state: st.session_state.running = False
-if 'last_update_id' not in st.session_state: st.session_state.last_update_id = 0
-if 'last_fetch_time' not in st.session_state: st.session_state.last_fetch_time = 0
-if 'results_cache' not in st.session_state: st.session_state.results_cache = []
-
-# --- Helper Functions ---
-def send_telegram(msg):
-    if bot_token and chat_id:
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        try: requests.post(url, json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
-        except: pass
-
-def fetch_data(tickers):
-    results = []
-    for symbol in tickers:
-        try:
-            t = yf.Ticker(symbol)
-            df_3d = t.history(period='3d', interval='1h')
-            df_today = t.history(period='1d', interval='1m')
-            if not df_3d.empty and not df_today.empty:
-                curr = df_today['Close'].iloc[-1]
-                h3 = df_3d['High'].max()
-                open_p = df_today['Open'].iloc[0]
-                pullback = ((curr - h3) / h3) * 100
-                day_chg = ((curr - open_p) / open_p) * 100
-                results.append({"Ticker": symbol, "Price": curr, "Pullback": pullback, "DayChg": day_chg})
-        except: continue
-    return results
-
-def check_bot_commands():
-    """Polls Telegram for commands without blocking the UI."""
-    if not bot_token or not chat_id: return False
-    url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
-    params = {"offset": st.session_state.last_update_id + 1, "timeout": 1}
-    try:
-        r = requests.get(url, params=params).json()
-        if r.get("result"):
-            for update in r["result"]:
-                st.session_state.last_update_id = update["update_id"]
-                msg = update.get("message", {})
-                if str(msg.get("chat", {}).get("id")) != str(chat_id).strip(): continue
-                text = msg.get("text", "").lower()
-                
-                if "/start" in text:
-                    st.session_state.running = True
-                    send_telegram("🚀 *Authorized: Monitor Started*")
-                    return True
-                elif "/stop" in text:
-                    st.session_state.running = False
-                    send_telegram("🛑 *Authorized: Monitor Stopped*")
-                    return True
-                elif "/status" in text:
-                    send_telegram("⌛ *Fetching current status...*")
-                    data = fetch_data([t.strip().upper() for t in ticker_input.split(",")])
-                    status_msg = "📊 *Current Status:*\n"
-                    for i in data: status_msg += f"*{i['Ticker']}*: ${i['Price']:.2f} ({i['Pullback']:.2f}%)\n"
-                    send_telegram(status_msg)
-    except: pass
-    return False
-
-# --- Main App Execution ---
-# Always check commands first
-if check_bot_commands(): st.rerun()
-
-status_txt = "🟢 RUNNING" if st.session_state.running else "🔴 STOPPED"
-st.sidebar.markdown(f"**System Status:** {status_txt}")
-
-if st.session_state.running:
-    tickers = [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
+if ticker:
+    df = load_data(ticker, period)
     
-    # 1. Timer Logic: Only fetch if interval has passed
-    current_time = time.time()
-    if (current_time - st.session_state.last_fetch_time) >= check_interval:
-        with st.spinner("Updating prices..."):
-            st.session_state.results_cache = fetch_data(tickers)
-            st.session_state.last_fetch_time = current_time
-            
-            # 2. Alert Logic
-            for item in st.session_state.results_cache:
-                if item['Pullback'] <= -drop_threshold:
-                    send_telegram(f"🚨 *{item['Ticker']} ALERT*\nDown `{abs(item['Pullback']):.2f}%` from 3D High.")
+    if not df.empty:
+        # --- 1. CALCULATE INDICATORS ---
+        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp1 - exp2
+        df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # 3. Display Data
-    if st.session_state.results_cache:
-        st.dataframe(pd.DataFrame(st.session_state.results_cache), use_container_width=True, hide_index=True)
-        st.caption(f"Last Price Sync: {time.strftime('%H:%M:%S')}. Next sync in {int(check_interval - (time.time() - st.session_state.last_fetch_time))}s.")
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        df['RSI'] = 100 - (100 / (1 + (gain / loss)))
 
-    # 4. Short Sleep for Bot Responsiveness
-    time.sleep(10)
-    st.rerun()
-else:
-    st.info("System Standby. Bot commands: `/start`, `/stop`, `/status`")
-    time.sleep(10)
-    st.rerun()
+        # --- 2. GENERATE SIGNALS & POSITIONS ---
+        # 1 = Buy/Hold, 0 = Sell/Cash
+        df['Signal'] = 0.0
+        # Buy condition
+        buy_cond = (df['MACD'] > df['Signal_Line']) & (df['RSI'] < 50)
+        # Sell condition
+        sell_cond = (df['MACD'] < df['Signal_Line']) & (df['RSI'] > 50)
+        
+        # Simple Logic: Enter on Buy, Exit on Sell
+        position = 0
+        signals = []
+        for i in range(len(df)):
+            if buy_cond.iloc[i]:
+                position = 1
+            elif sell_cond.iloc[i]:
+                position = 0
+            signals.append(position)
+        
+        df['Position'] = signals
+        
+        # --- 3. BACKTEST CALCULATIONS ---
+        df['Market_Returns'] = df['Close'].pct_change()
+        df['Strategy_Returns'] = df['Market_Returns'] * df['Position'].shift(1)
+        
+        df['Cumulative_Market'] = (1 + df['Market_Returns']).cumprod() * initial_capital
+        df['Cumulative_Strategy'] = (1 + df['Strategy_Returns']).cumprod() * initial_capital
+
+        # Metrics
+        total_return = ((df['Cumulative_Strategy'].iloc[-1] - initial_capital) / initial_capital) * 100
+        market_return = ((df['Cumulative_Market'].iloc[-1] - initial_capital) / initial_capital) * 100
+        final_val = df['Cumulative_Strategy'].iloc[-1]
+
+        # --- 4. DISPLAY RESULTS ---
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Final Portfolio Value", f"${final_val:,.2f}")
+        col2.metric("Strategy Total Return", f"{total_return:.2f}%", delta=f"{total_return - market_return:.2f}% vs Market")
+        col3.metric("Buy & Hold Return", f"{market_return:.2f}%")
+
+        # Plotting
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                            vertical_spacing=0.1, row_heights=[0.6, 0.4],
+                            subplot_titles=("Portfolio Value ($) Over Time", "MACD & RSI Context"))
+
+        # Portfolio Comparison
+        fig.add_trace(go.Scatter(x=df.index, y=df['Cumulative_Strategy'], name='Strategy', line=dict(color='#00ff00', width=2)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Cumulative_Market'], name='Buy & Hold', line=dict(color='gray', dash='dot')), row=1, col=1)
+
+        # MACD
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='cyan')), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='orange')), row=2, col=1)
+
+        fig.update_layout(height=700, template="plotly_dark", showlegend=True, xaxis_rangeslider_visible=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        st.error("Ticker data unavailable.")
