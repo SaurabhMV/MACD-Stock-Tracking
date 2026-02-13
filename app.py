@@ -45,11 +45,16 @@ if ticker:
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
         df['Hist'] = df['MACD'] - df['Signal_Line']
 
-        # RSI (14-day)
+        # --- Wilder's RSI Calculation ---
         delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        # Wilder's Smoothing Method (Exponential Moving Average with alpha = 1/period)
+        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        
+        rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
 
         # Bollinger Bands (20-day, 2 std dev)
@@ -102,11 +107,10 @@ if ticker:
 
         # --- 4. PLOTTING ---
         rows = 2 + (1 if show_rsi else 0) + (1 if show_adx else 0)
-        # Allocate height: 40% for price, 20% for others
         row_heights = [0.4] + [0.2] * (rows - 1)
         
         titles = [f"{ticker} Price Action", "MACD Momentum"]
-        if show_rsi: titles.append("RSI Strength")
+        if show_rsi: titles.append("RSI Strength (Wilder's)")
         if show_adx: titles.append("ADX Trend Strength")
 
         fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, 
