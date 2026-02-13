@@ -47,20 +47,28 @@ if ticker:
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         df['RSI'] = 100 - (100 / (1 + (gain / loss)))
 
-        # Bollinger Bands (20-day SMA)
+        # Bollinger Bands
         df['BB_Mid'] = df['Close'].rolling(window=20).mean()
         df['BB_Std'] = df['Close'].rolling(window=20).std()
         df['BB_Upper'] = df['BB_Mid'] + (df['BB_Std'] * 2)
         df['BB_Lower'] = df['BB_Mid'] - (df['BB_Std'] * 2)
 
-        # --- 2. SIGNAL GENERATION (MACD + RSI Confluence) ---
-        df['Buy_Signal'] = np.where((df['MACD'] > df['Signal_Line']) & 
-                                    (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)) & 
-                                    (df['RSI'] < 45), df['Close'], np.nan)
+        # --- 2. IMPROVED SIGNAL LOGIC ---
+        # Buy: MACD crosses ABOVE Signal Line AND RSI is not overbought (< 50)
+        df['Buy_Signal'] = np.where(
+            (df['MACD'] > df['Signal_Line']) & 
+            (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)) & 
+            (df['RSI'] < 50), 
+            df['Close'], np.nan
+        )
         
-        df['Sell_Signal'] = np.where((df['MACD'] < df['Signal_Line']) & 
-                                     (df['MACD'].shift(1) >= df['Signal_Line'].shift(1)) & 
-                                     (df['RSI'] > 55), df['Close'], np.nan)
+        # Sell: MACD crosses BELOW Signal Line AND RSI is not oversold (> 50)
+        df['Sell_Signal'] = np.where(
+            (df['MACD'] < df['Signal_Line']) & 
+            (df['MACD'].shift(1) >= df['Signal_Line'].shift(1)) & 
+            (df['RSI'] > 50), 
+            df['Close'], np.nan
+        )
 
         # --- 3. BACKTESTING ---
         df['Position'] = np.nan
@@ -80,47 +88,53 @@ if ticker:
         m3.metric("Portfolio Value", f"${df['Cum_ROI'].iloc[-1]:,.2f}")
 
         # --- 5. PLOTTING ---
-        # Determine number of rows dynamically
         rows = 2 + (1 if show_rsi else 0)
         row_heights = [0.5, 0.25, 0.25] if show_rsi else [0.7, 0.3]
         
         fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, 
-                            vertical_spacing=0.07, row_heights=row_heights,
-                            subplot_titles=(f"{ticker} Price & Volatility", "MACD Momentum", "RSI (Strength)"))
+                            vertical_spacing=0.05, row_heights=row_heights,
+                            subplot_titles=(f"{ticker} Price Action", "MACD Indicator", "RSI Indicator"))
 
         # Row 1: Price, BB, and Signals
-        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close', line=dict(color='white', width=1.5)), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', line=dict(color='white', width=1.5)), row=1, col=1)
         
         if show_bb:
-            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper', line=dict(color='rgba(173, 216, 230, 0.3)', width=1)), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower', line=dict(color='rgba(173, 216, 230, 0.3)', width=1), fill='tonexty'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper', line=dict(color='rgba(173, 216, 230, 0.2)', width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower', line=dict(color='rgba(173, 216, 230, 0.2)', width=1), fill='tonexty'), row=1, col=1)
 
         if show_signals:
-            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='Buy', mode='markers', marker=dict(symbol='triangle-up', size=12, color='#00ff00')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='Sell', mode='markers', marker=dict(symbol='triangle-down', size=12, color='#ff0000')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='BUY Trigger', mode='markers', marker=dict(symbol='triangle-up', size=14, color='#00ff00', line=dict(width=1, color='white'))), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='SELL Trigger', mode='markers', marker=dict(symbol='triangle-down', size=14, color='#ff0000', line=dict(width=1, color='white'))), row=1, col=1)
 
         # Row 2: MACD
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD Line', line=dict(color='#00d4ff')), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal Line', line=dict(color='#ff9900')), row=2, col=1)
         colors = ['red' if val < 0 else 'green' for val in df['Hist']]
-        fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Histogram', marker_color=colors, opacity=0.5), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='cyan')), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='orange')), row=2, col=1)
+        fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='MACD Histogram', marker_color=colors, opacity=0.4), row=2, col=1)
 
-        # Row 3: RSI (Optional)
+        # Row 3: RSI
         if show_rsi:
-            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='magenta')), row=3, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI Value', line=dict(color='#ff00ff')), row=3, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1, annotation_text="Overbought")
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1, annotation_text="Oversold")
 
-        fig.update_layout(height=400 + (200 * rows), template="plotly_dark", showlegend=False, xaxis_rangeslider_visible=False)
+        # Layout Update: Show Legend is now TRUE
+        fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
+                          xaxis_rangeslider_visible=False,
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        
         st.plotly_chart(fig, use_container_width=True)
 
         # --- 6. SUMMARY & EXPORT ---
-        st.subheader("Strategy Summary")
-        recent_signals = df[(df['Buy_Signal'].notna()) | (df['Sell_Signal'].notna())].tail(10)
-        st.dataframe(recent_signals[['Close', 'MACD', 'RSI', 'Cum_ROI']])
-        
-        csv = df.to_csv().encode('utf-8')
-        st.download_button(label="Download Full Backtest CSV", data=csv, file_name=f"{ticker}_analysis.csv", mime='text/csv')
+        st.subheader("Signal Data Table")
+        # Filter for only rows where a signal occurred
+        sig_data = df[(df['Buy_Signal'].notna()) | (df['Sell_Signal'].notna())].copy()
+        if not sig_data.empty:
+            st.dataframe(sig_data[['Close', 'MACD', 'RSI', 'Cum_ROI']].tail(10))
+            csv = df.to_csv().encode('utf-8')
+            st.download_button(label="Download CSV", data=csv, file_name=f"{ticker}_report.csv")
+        else:
+            st.info("No signals found for this period. Try a longer time frame.")
 
     else:
-        st.error("Ticker not found. Please try again.")
+        st.error("Invalid Ticker.")
