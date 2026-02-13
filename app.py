@@ -6,20 +6,21 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="Technical Stock Analyzer Pro", layout="wide")
-st.title("📈 Pro Stock Analysis Dashboard")
+st.set_page_config(page_title="Technical Stock Analyzer", layout="wide")
+st.title("📈 Technical Stock Analysis Dashboard")
 
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.header("Settings")
     ticker = st.text_input("Stock Ticker:", "AAPL").upper()
+    
     period = st.selectbox("Time Period:", ["3mo", "6mo", "1y", "2y", "5y", "max"], index=1)
     
     st.subheader("Chart Display")
     show_signals = st.checkbox("Show Buy/Sell Signals", value=True)
     show_bb = st.checkbox("Show Bollinger Bands", value=True)
     show_rsi = st.checkbox("Show RSI Chart", value=True)
-    show_adx = st.checkbox("Show ADX (Trend Strength)", value=True)
+    show_adx = st.checkbox("Show Trend Strength (ADX)", value=True)
 
 # --- DATA LOADING ---
 @st.cache_data
@@ -29,34 +30,35 @@ def load_data(symbol, p):
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.get_level_values(0)
         return data
-    except Exception:
+    except Exception as e:
         return pd.DataFrame()
 
 if ticker:
     df = load_data(ticker, period)
     
-    if not df.empty and len(df) > 30:
+    if not df.empty and len(df) > 26:
         # --- 1. CALCULATE INDICATORS ---
-        # MACD
+        # MACD (12, 26, 9)
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
         df['Hist'] = df['MACD'] - df['Signal_Line']
 
-        # RSI
+        # RSI (14-day)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
-        # Bollinger Bands
+        # Bollinger Bands (20-day, 2 std dev)
         df['BB_Mid'] = df['Close'].rolling(window=20).mean()
         df['BB_Std'] = df['Close'].rolling(window=20).std()
         df['BB_Upper'] = df['BB_Mid'] + (df['BB_Std'] * 2)
         df['BB_Lower'] = df['BB_Mid'] - (df['BB_Std'] * 2)
 
-        # ADX (Average Directional Index - Simplified)
+        # ADX (Average Directional Index - 14 period)
         plus_dm = df['High'].diff().clip(lower=0)
         minus_dm = df['Low'].diff().clip(upper=0).abs()
         tr = pd.concat([df['High'] - df['Low'], 
@@ -69,52 +71,97 @@ if ticker:
         df['ADX'] = dx.rolling(window=14).mean()
 
         # --- 2. SIGNAL GENERATION ---
-        df['Buy_Signal'] = np.where((df['MACD'] > df['Signal_Line']) & (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)) & (df['RSI'] < 50), df['Close'], np.nan)
-        df['Sell_Signal'] = np.where((df['MACD'] < df['Signal_Line']) & (df['MACD'].shift(1) >= df['Signal_Line'].shift(1)) & (df['RSI'] > 50), df['Close'], np.nan)
+        df['Buy_Signal'] = np.where(
+            (df['MACD'] > df['Signal_Line']) & 
+            (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)) & 
+            (df['RSI'] < 50), 
+            df['Close'], np.nan
+        )
+        
+        df['Sell_Signal'] = np.where(
+            (df['MACD'] < df['Signal_Line']) & 
+            (df['MACD'].shift(1) >= df['Signal_Line'].shift(1)) & 
+            (df['RSI'] > 50), 
+            df['Close'], np.nan
+        )
 
-        # --- 3. METRICS ---
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Price", f"${df['Close'].iloc[-1]:,.2f}")
-        c2.metric("RSI", f"{df['RSI'].iloc[-1]:.1f}")
-        trend_status = "Strong" if df['ADX'].iloc[-1] > 25 else "Weak/Sideways"
-        c3.metric("Trend Strength", trend_status, f"ADX: {df['ADX'].iloc[-1]:.1f}")
-        c4.metric("MACD Hist", f"{df['Hist'].iloc[-1]:.3f}")
+        # --- 3. DASHBOARD METRICS ---
+        current_price = df['Close'].iloc[-1]
+        price_change = current_price - df['Close'].iloc[-2]
+        pct_change = (price_change / df['Close'].iloc[-2]) * 100
+        current_rsi = df['RSI'].iloc[-1]
+        current_adx = df['ADX'].iloc[-1]
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Current Price", f"${current_price:,.2f}", f"{price_change:+.2f} ({pct_change:+.2f}%)")
+        col2.metric("Current RSI", f"{current_rsi:.1f}", "Overbought > 70 | Oversold < 30", delta_color="off")
+        col3.metric("MACD Level", f"{df['MACD'].iloc[-1]:.3f}", f"{df['Hist'].iloc[-1]:.3f} Hist")
+        
+        trend_label = "Strong Trend" if current_adx > 25 else "Weak/Sideways"
+        col4.metric("Trend Strength", f"{current_adx:.1f}", trend_label, delta_color="normal" if current_adx > 25 else "off")
 
         # --- 4. PLOTTING ---
-        rows = 2 + show_rsi + show_adx
-        heights = [0.4] + [0.2] * (rows - 1)
+        rows = 2 + (1 if show_rsi else 0) + (1 if show_adx else 0)
+        # Allocate height: 40% for price, 20% for others
+        row_heights = [0.4] + [0.2] * (rows - 1)
         
-        fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=heights)
+        titles = [f"{ticker} Price Action", "MACD Momentum"]
+        if show_rsi: titles.append("RSI Strength")
+        if show_adx: titles.append("ADX Trend Strength")
 
-        # Main Chart
-        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close', line=dict(color='white')), row=1, col=1)
+        fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, 
+                            vertical_spacing=0.05, row_heights=row_heights,
+                            subplot_titles=titles)
+
+        # Row 1: Price Chart
+        fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price', line=dict(color='white', width=1)), row=1, col=1)
+        
         if show_bb:
-            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper', line=dict(color='rgba(173,216,230,0.2)')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower', line=dict(color='rgba(173,216,230,0.2)'), fill='tonexty'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper', line=dict(color='rgba(173, 216, 230, 0.3)', width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower', line=dict(color='rgba(173, 216, 230, 0.3)', width=1), fill='tonexty'), row=1, col=1)
+
         if show_signals:
-            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='Buy', mode='markers', marker=dict(symbol='triangle-up', size=12, color='#00ff00')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='Sell', mode='markers', marker=dict(symbol='triangle-down', size=12, color='#ff0000')), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Buy_Signal'], name='BUY Signal', mode='markers', marker=dict(symbol='triangle-up', size=12, color='#00ff00', line=dict(width=1, color='white'))), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Sell_Signal'], name='SELL Signal', mode='markers', marker=dict(symbol='triangle-down', size=12, color='#ff0000', line=dict(width=1, color='white'))), row=1, col=1)
 
-        # MACD
-        curr_row = 2
-        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00d4ff')), row=curr_row, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='#ff9900')), row=curr_row, col=1)
-        curr_row += 1
+        # Row 2: MACD
+        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD Line', line=dict(color='#00d4ff', width=1.5)), row=2, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal Line', line=dict(color='#ff9900', width=1.5)), row=2, col=1)
+        colors = ['#ef5350' if val < 0 else '#26a69a' for val in df['Hist']]
+        fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='MACD Hist', marker_color=colors), row=2, col=1)
 
-        # RSI
+        current_row = 3
+        # Row 3: RSI (Optional)
         if show_rsi:
-            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#b39ddb')), row=curr_row, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="red", row=curr_row, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", row=curr_row, col=1)
-            curr_row += 1
+            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#b39ddb', width=2)), row=current_row, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=current_row, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=current_row, col=1)
+            current_row += 1
 
-        # ADX
+        # Row 4: ADX (Optional)
         if show_adx:
-            fig.add_trace(go.Scatter(x=df.index, y=df['ADX'], name='ADX (Strength)', line=dict(color='yellow')), row=curr_row, col=1)
-            fig.add_hline(y=25, line_dash="dot", line_color="white", row=curr_row, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['ADX'], name='ADX', line=dict(color='yellow', width=2)), row=current_row, col=1)
+            fig.add_hline(y=25, line_dash="dot", line_color="white", row=current_row, col=1)
 
-        fig.update_layout(height=300 + (200 * rows), template="plotly_dark", showlegend=True, xaxis_rangeslider_visible=False)
+        # Layout settings
+        fig.update_layout(height=400 + (rows * 150), template="plotly_dark", 
+                          xaxis_rangeslider_visible=False,
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+
         st.plotly_chart(fig, use_container_width=True)
 
+        # --- 5. SIGNAL HISTORY ---
+        st.subheader("Recent Signals")
+        signals_df = df[(df['Buy_Signal'].notna()) | (df['Sell_Signal'].notna())].copy()
+        
+        if not signals_df.empty:
+            display_cols = ['Close', 'MACD', 'Signal_Line', 'RSI', 'ADX']
+            st.dataframe(signals_df[display_cols].tail(10).style.format("{:.2f}"))
+            
+            csv = df.to_csv().encode('utf-8')
+            st.download_button(label="Download Data as CSV", data=csv, file_name=f"{ticker}_analysis.csv", mime='text/csv')
+        else:
+            st.info("No Buy/Sell signals generated in the selected period.")
+
     else:
-        st.error("Enter a valid ticker or select a longer time frame.")
+        st.error(f"Could not load data for {ticker}. Please check the ticker symbol.")
