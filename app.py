@@ -117,4 +117,29 @@ if ticker:
         if show_rsi:
             fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#b39ddb', width=2)), row=3, col=1)
             fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-            fig.add_hline(y=30, line_dash="
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+
+        # Layout settings
+        fig.update_layout(height=800, template="plotly_dark", 
+                          xaxis_rangeslider_visible=False,
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- 5. SIGNAL HISTORY ---
+        st.subheader("Recent Signals")
+        signals_df = df[(df['Buy_Signal'].notna()) | (df['Sell_Signal'].notna())].copy()
+        
+        if not signals_df.empty:
+            # Clean up dataframe for display
+            display_cols = ['Close', 'MACD', 'Signal_Line', 'RSI']
+            st.dataframe(signals_df[display_cols].tail(10).style.format("{:.2f}"))
+            
+            # Export CSV
+            csv = df.to_csv().encode('utf-8')
+            st.download_button(label="Download Data as CSV", data=csv, file_name=f"{ticker}_analysis.csv", mime='text/csv')
+        else:
+            st.info("No Buy/Sell signals generated in the selected period.")
+
+    else:
+        st.error(f"Could not load data for {ticker}. Please check the ticker symbol.")
