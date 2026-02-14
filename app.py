@@ -47,19 +47,19 @@ def load_data(symbol, p, i):
     except: return pd.DataFrame()
 
 def calculate_indicators(df):
-    # MACD
+    # MACD (Standard 12, 26, 9)
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
     exp2 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = exp1 - exp2
     df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
     df['Hist'] = df['MACD'] - df['Signal_Line']
-    # Wilder's RSI
+    # Wilder's RSI (14 period)
     delta = df['Close'].diff()
     gain, loss = delta.where(delta > 0, 0), -delta.where(delta < 0, 0)
     avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
     df['RSI'] = 100 - (100 / (1 + (avg_gain / (avg_loss + 1e-9))))
-    # ADX
+    # ADX (Average Directional Index)
     plus_dm, minus_dm = df['High'].diff().clip(lower=0), df['Low'].diff().clip(upper=0).abs()
     tr = pd.concat([df['High'] - df['Low'], (df['High'] - df['Close'].shift(1)).abs(), (df['Low'] - df['Close'].shift(1)).abs()], axis=1).max(axis=1)
     atr = tr.rolling(window=14).mean()
@@ -75,14 +75,14 @@ if ticker:
     if not df.empty and len(df) > 26:
         df = calculate_indicators(df)
         
-        # Cross-Timeframe Check
+        # Cross-Timeframe Check (Daily Anchor Trend)
         df_daily = load_data(ticker, "1y", "1d")
         if not df_daily.empty:
             df_daily = calculate_indicators(df_daily)
             anchor_trend = "BULLISH 🟢" if df_daily['MACD'].iloc[-1] > df_daily['Signal_Line'].iloc[-1] else "BEARISH 🔴"
         else: anchor_trend = "UNKNOWN"
 
-        # Signal Logic
+        # Multi-Tier Signal Logic
         up, down = (df['MACD'] > df['Signal_Line']) & (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)), (df['MACD'] < df['Signal_Line']) & (df['MACD'].shift(1) >= df['Signal_Line'].shift(1))
         r_buy, r_sell, adx_s = df['RSI'] < 50, df['RSI'] > 50, df['ADX'] > 25
         
@@ -118,7 +118,7 @@ if ticker:
             rows = 2 + show_rsi + show_adx
             fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.5] + [0.15]*(rows-1))
 
-            # Main Chart
+            # Row 1: Price Action
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price', line=dict(color='#FFFFFF', width=1.5)), row=1, col=1)
             if show_bb:
                 fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(173, 216, 230, 0.1)'), name='BB Upper'), row=1, col=1)
@@ -130,9 +130,10 @@ if ticker:
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='BUY', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='SELL', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
 
-            # MACD
-            fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00D4FF', width=1)), row=2, col=1)
+            # Row 2: MACD + Histogram + Signal Line
+            fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum (Hist)', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD Line', line=dict(color='#00D4FF', width=1.5)), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal Line', line=dict(color='#FF9900', width=1.2, dash='solid')), row=2, col=1)
 
             curr_r = 3
             if show_rsi:
@@ -149,19 +150,19 @@ if ticker:
             st.plotly_chart(fig, use_container_width=True)
 
         with tab2:
-            st.header("Signal Hierarchy")
+            st.header("Strategy Architecture")
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.subheader("💎 Strong Tier")
-                st.write("MACD Cross + RSI Filter + ADX > 25. High probability trend continuation.")
+                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.\n\nIndicates a high-conviction momentum move within an established trend.")
             with c2:
                 st.subheader("🔺 Standard Tier")
-                st.write("MACD Cross + RSI Filter. Reliable momentum entry without overextension.")
+                st.write("**Criteria:** MACD Cross + RSI Filter.\n\nA classic momentum entry, filtered to avoid extremely overbought/oversold levels.")
             with c3:
                 st.subheader("⚪ Pure Tier")
-                st.write("MACD Cross only. Raw momentum, use with caution.")
+                st.write("**Criteria:** MACD Crossover Only.\n\nUnfiltered momentum. Useful for early trend detection but prone to market noise.")
             
-            st.info("**Wilder's RSI:** Uses smoothed moving averages for more stable readings compared to standard RSI.")
+            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation to reduce false signals often found in standard RSI implementations.")
 
     else:
-        st.error(f"Waiting for sufficient data for {ticker}...")
+        st.error(f"Waiting for sufficient data for {ticker} (Indicators require >26 periods)...")
