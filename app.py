@@ -19,7 +19,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🔭 Pro-Swing Trading Command Center")
+st.title(f"🔭 {ticker} Analysis: Technical Convergence Terminal")
 
 # --- SIDEBAR: Grouped Settings ---
 with st.sidebar:
