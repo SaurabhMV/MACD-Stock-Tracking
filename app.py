@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # --- APP CONFIG & STYLING ---
-st.set_page_config(page_title="Pro-Swing Analyzer", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Pro-Trading Terminal", layout="wide", initial_sidebar_state="expanded")
 
 # Custom CSS for a cleaner, modern look
 st.markdown("""
@@ -34,7 +34,7 @@ with st.sidebar:
         show_rsi = st.checkbox("RSI Sub-chart", value=True)
         show_adx = st.checkbox("ADX Sub-chart", value=True)
 
-st.title(f"🔭 {ticker} Analysis: Technical Convergence Terminal")
+st.title(f"🔭 {ticker}: Technical Convergence Terminal")
 
 # --- DATA ENGINE ---
 @st.cache_data
