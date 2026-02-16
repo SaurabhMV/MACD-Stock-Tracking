@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # --- APP CONFIG & STYLING ---
-st.set_page_config(page_title="Pro-Trading Terminal", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Pro Trading Terminal", layout="wide", initial_sidebar_state="expanded")
 
 # Custom CSS for a cleaner, modern look
 st.markdown("""
