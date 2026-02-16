@@ -19,8 +19,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title(f"🔭 {ticker} Analysis: Technical Convergence Terminal")
-
 # --- SIDEBAR: Grouped Settings ---
 with st.sidebar:
     st.header("🛠️ Configuration")
@@ -35,6 +33,8 @@ with st.sidebar:
         show_bb = st.checkbox("Bollinger Bands", value=True)
         show_rsi = st.checkbox("RSI Sub-chart", value=True)
         show_adx = st.checkbox("ADX Sub-chart", value=True)
+
+st.title(f"🔭 {ticker} Analysis: Technical Convergence Terminal")
 
 # --- DATA ENGINE ---
 @st.cache_data
