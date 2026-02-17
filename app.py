@@ -125,9 +125,9 @@ if ticker:
                 rows=rows, 
                 cols=1, 
                 shared_xaxes=True, 
-                vertical_spacing=0.05, # Increased slightly for title room
+                vertical_spacing=0.06, # Increased slightly for title badges
                 row_heights=[0.5] + [0.15]*(rows-1),
-                subplot_titles=titles # ADDS THE HEADERS
+                subplot_titles=titles 
             )
 
             # Row 1: Price Action
@@ -156,16 +156,23 @@ if ticker:
             if show_adx:
                 fig.add_trace(go.Scatter(x=df.index, y=df['ADX'], name='ADX', line=dict(color='#FDD835', width=1.5)), row=curr_r, col=1)
 
-            # Layout adjustments to make room for sub-titles
+            # Layout adjustments
             fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
                               margin=dict(l=10, r=10, t=50, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
             
-            # Make subplot titles slightly smaller and aligned left
-            fig.update_annotations(font_size=14, x=0) 
+            # --- UPDATED HEADER STYLING ---
+            fig.update_annotations(
+                font=dict(family="Helvetica, sans-serif", size=14, color="#FFFFFF"), # Professional font
+                bgcolor="#1e2130",       # Matches your app's metric background
+                bordercolor="#31333f",   # Subtle border
+                borderwidth=1,
+                borderpad=5,             # Padding inside the badge
+                rx=3                     # Rounded corners
+                # Note: 'x' argument is removed so Plotly auto-centers them
+            )
             
             st.plotly_chart(fig, use_container_width=True)
-
         with tab2:
             st.header("Strategy Architecture")
             c1, c2, c3 = st.columns(3)
