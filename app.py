@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # --- APP CONFIG & STYLING ---
 st.set_page_config(page_title="Pro Trading Terminal", layout="wide", initial_sidebar_state="expanded")
@@ -35,9 +35,10 @@ with st.sidebar:
         show_rsi = st.checkbox("RSI Sub-chart", value=True)
         show_adx = st.checkbox("ADX Sub-chart", value=True)
     
-    # --- NEW: TIMESTAMP ---
+    # --- UPDATED: TIMESTAMP WITH EST TIMEZONE ---
     st.divider()
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    est_tz = timezone(timedelta(hours=-5)) # Eastern Standard Time offset
+    current_time = datetime.now(est_tz).strftime("%Y-%m-%d %H:%M:%S EST")
     st.caption(f"Last updated: {current_time}")
 
 st.title(f"🔭 {ticker}: Technical Convergence Terminal")
@@ -121,7 +122,6 @@ if ticker:
         tab1, tab2 = st.tabs(["📈 Analysis Chart", "📚 Strategy Guide"])
 
         with tab1:
-            # Titles based on selected features
             titles = ["Price Action & Signals", "Momentum (MACD)"]
             if show_rsi: titles.append("Relative Strength (RSI)")
             if show_adx: titles.append("Trend Strength (ADX)")
@@ -132,12 +132,11 @@ if ticker:
                 rows=rows, 
                 cols=1, 
                 shared_xaxes=True, 
-                vertical_spacing=0.08, # Spacing for the badges
+                vertical_spacing=0.08, 
                 row_heights=[0.5] + [0.15]*(rows-1),
                 subplot_titles=titles 
             )
 
-            # Row 1: Price Action
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price', line=dict(color='#FFFFFF', width=1.5)), row=1, col=1)
             if show_bb:
                 fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(173, 216, 230, 0.1)'), name='BB Upper'), row=1, col=1)
@@ -149,7 +148,6 @@ if ticker:
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='BUY', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='SELL', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
 
-            # Row 2: MACD
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum (Hist)', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD Line', line=dict(color='#00D4FF', width=1.5)), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal Line', line=dict(color='#FF9900', width=1.2, dash='solid')), row=2, col=1)
@@ -163,12 +161,10 @@ if ticker:
             if show_adx:
                 fig.add_trace(go.Scatter(x=df.index, y=df['ADX'], name='ADX', line=dict(color='#FDD835', width=1.5)), row=curr_r, col=1)
 
-            # Layout adjustments
             fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
                               margin=dict(l=10, r=10, t=80, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
             
-            # --- HEADER STYLING ---
             fig.update_annotations(
                 font=dict(family="Helvetica, sans-serif", size=14, color="#FFFFFF"), 
                 bgcolor="#1e2130",       
@@ -184,15 +180,15 @@ if ticker:
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.subheader("💎 Strong Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.\n\nIndicates a high-conviction momentum move within an established trend.")
+                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.")
             with c2:
                 st.subheader("🔺 Standard Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter.\n\nA classic momentum entry, filtered to avoid extremely overbought/oversold levels.")
+                st.write("**Criteria:** MACD Cross + RSI Filter.")
             with c3:
                 st.subheader("⚪ Pure Tier")
-                st.write("**Criteria:** MACD Crossover Only.\n\nUnfiltered momentum. Useful for early trend detection but prone to market noise.")
+                st.write("**Criteria:** MACD Crossover Only.")
             
-            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation to reduce false signals often found in standard RSI implementations.")
+            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation.")
 
     else:
         st.error(f"Waiting for sufficient data for {ticker} (Indicators require >26 periods)...")
