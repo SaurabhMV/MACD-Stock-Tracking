@@ -168,7 +168,18 @@ if ticker:
 
         with tab2:
             st.header("Strategy Architecture")
-            st.info("Strategy logic remains active and updates with every live data pull.")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.subheader("💎 Strong Tier")
+                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.")
+            with c2:
+                st.subheader("🔺 Standard Tier")
+                st.write("**Criteria:** MACD Cross + RSI Filter.")
+            with c3:
+                st.subheader("⚪ Pure Tier")
+                st.write("**Criteria:** MACD Crossover Only.")
+            
+            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation.")
 
         # --- LIVE RERUN LOGIC ---
         if auto_refresh:
