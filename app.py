@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from datetime import datetime
 
 # --- APP CONFIG & STYLING ---
 st.set_page_config(page_title="Pro Trading Terminal", layout="wide", initial_sidebar_state="expanded")
@@ -33,6 +34,11 @@ with st.sidebar:
         show_bb = st.checkbox("Bollinger Bands", value=True)
         show_rsi = st.checkbox("RSI Sub-chart", value=True)
         show_adx = st.checkbox("ADX Sub-chart", value=True)
+    
+    # --- NEW: TIMESTAMP ---
+    st.divider()
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.caption(f"Last updated: {current_time}")
 
 st.title(f"🔭 {ticker}: Technical Convergence Terminal")
 
@@ -126,7 +132,7 @@ if ticker:
                 rows=rows, 
                 cols=1, 
                 shared_xaxes=True, 
-                vertical_spacing=0.08, # INCREASED to prevent badge collision
+                vertical_spacing=0.08, # Spacing for the badges
                 row_heights=[0.5] + [0.15]*(rows-1),
                 subplot_titles=titles 
             )
@@ -162,8 +168,7 @@ if ticker:
                               margin=dict(l=10, r=10, t=80, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
             
-            # --- FIXED HEADER STYLING ---
-            # By removing 'y', Plotly keeps the headers at their respective subplot positions
+            # --- HEADER STYLING ---
             fig.update_annotations(
                 font=dict(family="Helvetica, sans-serif", size=14, color="#FFFFFF"), 
                 bgcolor="#1e2130",       
