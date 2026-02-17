@@ -121,11 +121,13 @@ if ticker:
             if show_adx: titles.append("Trend Strength (ADX)")
 
             rows = 2 + show_rsi + show_adx
+            
+            # Create subplots with titles
             fig = make_subplots(
                 rows=rows, 
                 cols=1, 
                 shared_xaxes=True, 
-                vertical_spacing=0.06, # Increased slightly for title badges
+                vertical_spacing=0.07, # Slightly more space for the badges
                 row_heights=[0.5] + [0.15]*(rows-1),
                 subplot_titles=titles 
             )
@@ -158,21 +160,22 @@ if ticker:
 
             # Layout adjustments
             fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
-                              margin=dict(l=10, r=10, t=50, b=10),
+                              margin=dict(l=10, r=10, t=60, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
             
-            # --- UPDATED HEADER STYLING ---
+            # --- CENTRED & AESTHETIC HEADERS ---
             fig.update_annotations(
-                font=dict(family="Helvetica, sans-serif", size=14, color="#FFFFFF"), # Professional font
-                bgcolor="#1e2130",       # Matches your app's metric background
-                bordercolor="#31333f",   # Subtle border
-                borderwidth=1,
-                borderpad=5,             # Padding inside the badge
-                rx=3                     # Rounded corners
-                # Note: 'x' argument is removed so Plotly auto-centers them
+                font=dict(family="Helvetica, sans-serif", size=15, color="#FFFFFF"), 
+                bgcolor="#1e2130",       # Matches metric card color
+                bordercolor="#31333f",   # Matches metric border
+                borderwidth=1.5,
+                borderpad=6,             # Padding for the "Badge" look
+                yanchor="bottom",
+                y=1.02                   # Positions it slightly above the plot area
             )
             
             st.plotly_chart(fig, use_container_width=True)
+
         with tab2:
             st.header("Strategy Architecture")
             c1, c2, c3 = st.columns(3)
