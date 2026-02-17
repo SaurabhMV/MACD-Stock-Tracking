@@ -115,8 +115,20 @@ if ticker:
         tab1, tab2 = st.tabs(["📈 Analysis Chart", "📚 Strategy Guide"])
 
         with tab1:
+            # Dynamically determine labels based on checkboxes
+            titles = ["Price Action & Signals", "Momentum (MACD)"]
+            if show_rsi: titles.append("Relative Strength (RSI)")
+            if show_adx: titles.append("Trend Strength (ADX)")
+
             rows = 2 + show_rsi + show_adx
-            fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.5] + [0.15]*(rows-1))
+            fig = make_subplots(
+                rows=rows, 
+                cols=1, 
+                shared_xaxes=True, 
+                vertical_spacing=0.05, # Increased slightly for title room
+                row_heights=[0.5] + [0.15]*(rows-1),
+                subplot_titles=titles # ADDS THE HEADERS
+            )
 
             # Row 1: Price Action
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price', line=dict(color='#FFFFFF', width=1.5)), row=1, col=1)
@@ -130,7 +142,7 @@ if ticker:
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='BUY', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='SELL', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
 
-            # Row 2: MACD + Histogram + Signal Line
+            # Row 2: MACD
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum (Hist)', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD Line', line=dict(color='#00D4FF', width=1.5)), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal Line', line=dict(color='#FF9900', width=1.2, dash='solid')), row=2, col=1)
@@ -144,9 +156,14 @@ if ticker:
             if show_adx:
                 fig.add_trace(go.Scatter(x=df.index, y=df['ADX'], name='ADX', line=dict(color='#FDD835', width=1.5)), row=curr_r, col=1)
 
-            fig.update_layout(height=800, template="plotly_dark", showlegend=True, 
-                              margin=dict(l=10, r=10, t=10, b=10),
+            # Layout adjustments to make room for sub-titles
+            fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
+                              margin=dict(l=10, r=10, t=50, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
+            
+            # Make subplot titles slightly smaller and aligned left
+            fig.update_annotations(font_size=14, x=0) 
+            
             st.plotly_chart(fig, use_container_width=True)
 
         with tab2:
