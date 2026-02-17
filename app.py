@@ -102,14 +102,16 @@ if ticker:
             anchor_trend = "BULLISH 🟢" if df_daily['MACD'].iloc[-1] > df_daily['Signal_Line'].iloc[-1] else "BEARISH 🔴"
         else: anchor_trend = "UNKNOWN"
 
-        # Signal Logic
+        # UPDATED SIGNAL LOGIC (ADX REMOVED)
         up, down = (df['MACD'] > df['Signal_Line']) & (df['MACD'].shift(1) <= df['Signal_Line'].shift(1)), (df['MACD'] < df['Signal_Line']) & (df['MACD'].shift(1) >= df['Signal_Line'].shift(1))
-        r_buy, r_sell, adx_s = df['RSI'] < 50, df['RSI'] > 50, df['ADX'] > 25
+        r_buy, r_sell = df['RSI'] < 50, df['RSI'] > 50
         
-        df['Strong_Buy'] = np.where(up & r_buy & adx_s, df['Close'], np.nan)
-        df['Strong_Sell'] = np.where(down & r_sell & adx_s, df['Close'], np.nan)
-        df['Standard_Buy'] = np.where(up & r_buy & ~adx_s, df['Close'], np.nan)
-        df['Standard_Sell'] = np.where(down & r_sell & ~adx_s, df['Close'], np.nan)
+        # Strong: MACD + RSI
+        df['Strong_Buy'] = np.where(up & r_buy, df['Close'], np.nan)
+        df['Strong_Sell'] = np.where(down & r_sell, df['Close'], np.nan)
+        # Standard: MACD Only (filtered to avoid overlapping Strong icons)
+        df['Standard_Buy'] = np.where(up & ~r_buy, df['Close'], np.nan)
+        df['Standard_Sell'] = np.where(down & ~r_sell, df['Close'], np.nan)
 
         # Bollinger Bands
         df['BB_Mid'] = df['Close'].rolling(window=20).mean()
@@ -135,8 +137,14 @@ if ticker:
             if show_adx: titles.append("Trend Strength (ADX)")
 
             rows = 2 + show_rsi + show_adx
+            
+            # --- UPDATED DYNAMIC ROW HEIGHTS (Larger MACD) ---
+            if rows == 2: h = [0.6, 0.4]
+            elif rows == 3: h = [0.5, 0.3, 0.2]
+            else: h = [0.4, 0.3, 0.15, 0.15]
+
             fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.08, 
-                                row_heights=[0.5] + [0.15]*(rows-1), subplot_titles=titles)
+                                row_heights=h, subplot_titles=titles)
 
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price', line=dict(color='#FFFFFF', width=1.5)), row=1, col=1)
             if show_bb:
@@ -144,15 +152,14 @@ if ticker:
                 fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], line=dict(color='rgba(173, 216, 230, 0.1)'), fill='tonexty', name='BB Lower'), row=1, col=1)
 
             if show_signals:
-                # UPDATED LEGEND NAMES
                 fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Buy'], name='💎 Strong Buy', mode='markers', marker=dict(symbol='diamond', size=12, color='#00FF00', line=dict(width=1, color='white'))), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Sell'], name='💎 Strong Sell', mode='markers', marker=dict(symbol='diamond', size=12, color='#FF4B4B', line=dict(width=1, color='white'))), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='🔺 Standard Buy', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
                 fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='🔺 Standard Sell', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
 
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00D4FF')), row=2, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='#FF9900')), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00D4FF', width=2)), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['Signal_Line'], name='Signal', line=dict(color='#FF9900', width=1.5)), row=2, col=1)
 
             curr_r = 3
             if show_rsi:
@@ -168,18 +175,15 @@ if ticker:
 
         with tab2:
             st.header("Strategy Architecture")
-            c1, c2, c3 = st.columns(3)
+            c1, c2 = st.columns(2)
             with c1:
                 st.subheader("💎 Strong Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.\n\nIndicates a high-conviction momentum move within an established trend.")
+                st.write("**Criteria:** MACD Crossover + RSI Filter.\n\nIndicates momentum confirmed by relative strength conditions.")
             with c2:
                 st.subheader("🔺 Standard Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter.\n\nA classic momentum entry, filtered to avoid extremely overbought/oversold levels.")
-            with c3:
-                st.subheader("⚪ Pure Tier")
-                st.write("**Criteria:** MACD Crossover Only.\n\nUnfiltered momentum. Useful for early trend detection but prone to market noise.")
+                st.write("**Criteria:** MACD Crossover Only.\n\nPure momentum signals without the RSI overlay.")
             
-            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation to reduce false signals.")
+            st.info("**Visual Note:** The MACD chart has been enlarged to 30% of the total view to improve line visibility.")
 
         # --- LIVE RERUN LOGIC ---
         if auto_refresh:
