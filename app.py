@@ -115,19 +115,18 @@ if ticker:
         tab1, tab2 = st.tabs(["📈 Analysis Chart", "📚 Strategy Guide"])
 
         with tab1:
-            # Dynamically determine labels based on checkboxes
+            # Titles based on selected features
             titles = ["Price Action & Signals", "Momentum (MACD)"]
             if show_rsi: titles.append("Relative Strength (RSI)")
             if show_adx: titles.append("Trend Strength (ADX)")
 
             rows = 2 + show_rsi + show_adx
             
-            # Create subplots with titles
             fig = make_subplots(
                 rows=rows, 
                 cols=1, 
                 shared_xaxes=True, 
-                vertical_spacing=0.07, # Slightly more space for the badges
+                vertical_spacing=0.08, # INCREASED to prevent badge collision
                 row_heights=[0.5] + [0.15]*(rows-1),
                 subplot_titles=titles 
             )
@@ -160,18 +159,17 @@ if ticker:
 
             # Layout adjustments
             fig.update_layout(height=900, template="plotly_dark", showlegend=True, 
-                              margin=dict(l=10, r=10, t=60, b=10),
+                              margin=dict(l=10, r=10, t=80, b=10),
                               hovermode="x unified", xaxis_rangeslider_visible=False)
             
-            # --- CENTRED & AESTHETIC HEADERS ---
+            # --- FIXED HEADER STYLING ---
+            # By removing 'y', Plotly keeps the headers at their respective subplot positions
             fig.update_annotations(
-                font=dict(family="Helvetica, sans-serif", size=15, color="#FFFFFF"), 
-                bgcolor="#1e2130",       # Matches metric card color
-                bordercolor="#31333f",   # Matches metric border
+                font=dict(family="Helvetica, sans-serif", size=14, color="#FFFFFF"), 
+                bgcolor="#1e2130",       
+                bordercolor="#31333f",   
                 borderwidth=1.5,
-                borderpad=6,             # Padding for the "Badge" look
-                yanchor="bottom",
-                y=1.02                   # Positions it slightly above the plot area
+                borderpad=5
             )
             
             st.plotly_chart(fig, use_container_width=True)
