@@ -36,7 +36,7 @@ with st.sidebar:
         show_rsi = st.checkbox("RSI Sub-chart", value=True)
         show_adx = st.checkbox("ADX Sub-chart", value=True)
 
-    # --- NEW: AUTO REFRESH CONTROLS ---
+    # --- AUTO REFRESH CONTROLS ---
     with st.expander("🔄 Live Update Settings", expanded=True):
         auto_refresh = st.toggle("Enable Auto-Refresh", value=False)
         refresh_interval = st.select_slider(
@@ -52,10 +52,7 @@ with st.sidebar:
     current_time = datetime.now(est_tz).strftime("%Y-%m-%d %H:%M:%S EST")
     st.caption(f"Last updated: {current_time}")
 
-st.title(f"🔭 {ticker}: Technical Convergence Terminal")
-
 # --- DATA ENGINE ---
-# TTL is set to the refresh interval to ensure fresh data on every auto-reload
 @st.cache_data(ttl=refresh_interval)
 def load_data(symbol, p, i):
     try:
@@ -89,6 +86,8 @@ def calculate_indicators(df):
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
     df['ADX'] = dx.rolling(window=14).mean()
     return df
+
+st.title(f"🔭 {ticker}: Technical Convergence Terminal")
 
 if ticker:
     df = load_data(ticker, period, interval)
@@ -145,10 +144,11 @@ if ticker:
                 fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], line=dict(color='rgba(173, 216, 230, 0.1)'), fill='tonexty', name='BB Lower'), row=1, col=1)
 
             if show_signals:
-                fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Buy'], name='STR. BUY', mode='markers', marker=dict(symbol='diamond', size=12, color='#00FF00', line=dict(width=1, color='white'))), row=1, col=1)
-                fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Sell'], name='STR. SELL', mode='markers', marker=dict(symbol='diamond', size=12, color='#FF4B4B', line=dict(width=1, color='white'))), row=1, col=1)
-                fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='BUY', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
-                fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='SELL', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
+                # UPDATED LEGEND NAMES
+                fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Buy'], name='💎 Strong Buy', mode='markers', marker=dict(symbol='diamond', size=12, color='#00FF00', line=dict(width=1, color='white'))), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df.index, y=df['Strong_Sell'], name='💎 Strong Sell', mode='markers', marker=dict(symbol='diamond', size=12, color='#FF4B4B', line=dict(width=1, color='white'))), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Buy'], name='🔺 Standard Buy', mode='markers', marker=dict(symbol='triangle-up', size=9, color='#00FF00')), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df.index, y=df['Standard_Sell'], name='🔺 Standard Sell', mode='markers', marker=dict(symbol='triangle-down', size=9, color='#FF4B4B')), row=1, col=1)
 
             fig.add_trace(go.Bar(x=df.index, y=df['Hist'], name='Momentum', marker_color=['#FF4B4B' if v < 0 else '#00FF00' for v in df['Hist']]), row=2, col=1)
             fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#00D4FF')), row=2, col=1)
@@ -171,15 +171,15 @@ if ticker:
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.subheader("💎 Strong Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.")
+                st.write("**Criteria:** MACD Cross + RSI Filter + ADX > 25.\n\nIndicates a high-conviction momentum move within an established trend.")
             with c2:
                 st.subheader("🔺 Standard Tier")
-                st.write("**Criteria:** MACD Cross + RSI Filter.")
+                st.write("**Criteria:** MACD Cross + RSI Filter.\n\nA classic momentum entry, filtered to avoid extremely overbought/oversold levels.")
             with c3:
                 st.subheader("⚪ Pure Tier")
-                st.write("**Criteria:** MACD Crossover Only.")
+                st.write("**Criteria:** MACD Crossover Only.\n\nUnfiltered momentum. Useful for early trend detection but prone to market noise.")
             
-            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation.")
+            st.info("**Indicator Note:** We use Wilder's Smoothing for the RSI calculation to reduce false signals.")
 
         # --- LIVE RERUN LOGIC ---
         if auto_refresh:
@@ -187,4 +187,4 @@ if ticker:
             st.rerun()
 
     else:
-        st.error(f"Waiting for data for {ticker}...")
+        st.error(f"Waiting for sufficient data for {ticker} (Indicators require >26 periods)...")
